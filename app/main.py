@@ -41,10 +41,11 @@ app.add_middleware(
     allow_origins=[
         "https://appsiliconcapital.com",
         "https://proposal.appsiliconcapital.com",
-        "http://localhost:3000",      # Para python -m http.server
-        "http://127.0.0.1:3000",
-        "http://localhost:5500",      # Para Live Server de VS Code
-        "http://127.0.0.1:5500",
+        "https://silicon-proposal-frontend.netlify.app",  # Frontend en producción
+        "http://localhost:5500",  # Live Server (VS Code)
+        "http://127.0.0.1:5500",  # Live Server alternativa
+        "http://localhost:3000",  # Dev local
+        "http://127.0.0.1:3000",  # Dev local
     ],
     allow_credentials=True,
     allow_methods=["POST",  "OPTIONS"], # Incluye OPTIONS para preflight CORS
