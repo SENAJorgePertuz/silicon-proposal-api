@@ -123,3 +123,98 @@ async def render_proposal(request: RenderRequest):
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+    
+    
+
+
+import io
+import tempfile
+import subprocess
+
+@app.post(
+    "/render/pdf", 
+    summary="Generar y descargar propuesta en formato PDF"
+)
+async def render_proposal_pdf(request: RenderRequest):
+    """
+    Genera una propuesta PDF basada en la plantilla PPTX.
+
+    Flujo:
+    1. Usa la misma lógica de reemplazos que `/render`.
+    2. Genera un archivo PPTX temporal.
+    3. Usa LibreOffice en modo headless para convertirlo a PDF.
+    4. Devuelve el PDF como descarga directa.
+
+    Requiere:
+        - LibreOffice instalado en el entorno (Render: via apt-get install libreoffice)
+    """
+
+    # 1️⃣ Validar que la plantilla existe
+    if not os.path.exists(TEMPLATE_PATH):
+        raise HTTPException(status_code=500, detail="Plantilla PPTX no encontrada")
+
+    # 2️⃣ Preparar los reemplazos (idéntico a /render)
+    overrides = request.pricing_overrides
+    replacements = {
+        "{COMPANY_NAME}": request.company_name,
+        "{SETUP_FEE}": f"{overrides.SETUP_FEE:,.0f}€".replace(",", "."),
+        "{SHORT_FEE}": f"{overrides.SHORT_FEE:,.0f}€".replace(",", "."),
+        "{FULL_FEE}": f"{overrides.FULL_FEE:,.0f}€".replace(",", "."),
+        "{GRANT_FEE}": overrides.GRANT_FEE,
+        "{EQUITY_FEE}": overrides.EQUITY_FEE,
+        "{CONTACT_NAME}": request.contact_name,
+        "{CONTACT_EMAIL}": request.contact_email,
+        "{DATE}": request.proposal_date.strftime("%d/%m/%Y"),
+        "{PROGRAM}": request.program,
+    }
+
+    try:
+        # 3️⃣ Generar la presentación en memoria
+        pptx_stream = generate_presentation(
+            template_path=TEMPLATE_PATH,
+            replacements=replacements,
+            slide_toggles=request.slide_toggles
+        )
+
+        # 4️⃣ Guardarla temporalmente para conversión
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as tmp_pptx:
+            tmp_pptx.write(pptx_stream.getvalue())
+            tmp_pptx.flush()
+            pptx_path = tmp_pptx.name
+
+        # 5️⃣ Definir ruta destino del PDF
+        pdf_path = pptx_path.replace(".pptx", ".pdf")
+
+        # 6️⃣ Ejecutar LibreOffice headless
+        subprocess.run([
+            "libreoffice",
+            "--headless",
+            "--convert-to", "pdf",
+            "--outdir", os.path.dirname(pptx_path),
+            pptx_path
+        ], check=True)
+
+        # 7️⃣ Leer PDF resultante
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+
+        # 8️⃣ Limpiar archivos temporales
+        os.remove(pptx_path)
+        os.remove(pdf_path)
+
+        # 9️⃣ Preparar nombre de archivo
+        safe_company = "".join(c if c.isalnum() or c in " _-" else "_" for c in request.company_name)
+        filename = f"SiliconCP_Proposal_{safe_company}.pdf"
+
+        # 🔟 Retornar PDF
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail=f"Error en conversión LibreOffice: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error general: {str(e)}")
+    
