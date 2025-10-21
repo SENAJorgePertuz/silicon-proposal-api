@@ -11,13 +11,13 @@ RUN apt-get update && apt-get install -y libreoffice && apt-get clean
 WORKDIR /app
 
 # Copiar dependencias e instalarlas
-COPY backend/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el código fuente de la app
-COPY backend/app ./app
-COPY backend/Procfile ./Procfile
-COPY backend/runtime.txt ./runtime.txt
+COPY app ./app
+COPY Procfile ./Procfile
+COPY runtime.txt ./runtime.txt
 
 # Exponer el puerto (Render usa 10000)
 EXPOSE 10000
